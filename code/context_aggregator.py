@@ -13,13 +13,13 @@ def main(args):
         context_map = OrderedDict([])
         count = 0
         for ex in data:
-            
+
             start = ex[4][1][1][0]
             end = ex[4][1][-2][0]
-            
+
             # use doc_id + start token and end token spans as unique context id
             context_id = (ex[0], start, end)
-            
+
             # sample id, (left id, right id), label_idx, distance, reverse_ind,
             # (left_start, left_end, right_start, right_end), pred_ind
             rel = (ex[1], ex[2], ex[3], ex[4][3], ex[4][4], ex[4][5:9], ex[4][9])
@@ -33,7 +33,7 @@ def main(args):
                 count += 1
 
         save_dir = args.data_dir + '/all_context/'
-        
+
         if not os.path.isdir(save_dir):
             os.mkdir(save_dir)
 
@@ -48,10 +48,10 @@ def main(args):
 if __name__ == '__main__':
 
     p = argparse.ArgumentParser()
-    p.add_argument('-data_dir', type=str)
+    p.add_argument('-data_dir', type=str, default="../data/")
     p.add_argument('-data_type', type=str, default="matres")
 
     args = p.parse_args()
-    
+
     args.data_dir += args.data_type
     main(args)

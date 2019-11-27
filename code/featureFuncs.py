@@ -13,12 +13,12 @@ def read_glove(input_dir):
 def create_pos_dict(nlp_ann):
     pos_dict = OrderedDict()
     for key, pos in nlp_ann.items():
-        # to find the last '['                                                                                                                            
+        # to find the last '['
         key = str(key)
         splt = key.rfind('[')
         tok = key[:splt]
         span = key[splt:]
-        ### span has to be the key because duplicate tokens can occur in a text                                                                           
+        ### span has to be the key because duplicate tokens can occur in a text
         pos_dict[span] = (tok, pos.label)
     return pos_dict
 
@@ -44,16 +44,16 @@ def token_idx(left, right, pos_dict):
 
     all_keys = list(pos_dict.keys())
 
-    ### to handle case with multiple tokens                                                                                       
+    ### to handle case with multiple tokens
     lkey_start = str(left[0])
     lkey_end = str(left[1])
 
-    ### to handle start is not an exact match -- "tomtake", which should be "to take"                                                                                                                                                                                                                            
+    ### to handle start is not an exact match -- "tomtake", which should be "to take"
     lidx_start = 0
     while int(all_keys[lidx_start].split(':')[1][:-1]) <= left[0]:
         lidx_start += 1
 
-    ### to handle case such as "ACCOUNCED--" or multiple token ends with not match                                                                                                                                                          
+    ### to handle case such as "ACCOUNCED--" or multiple token ends with not match
     lidx_end = lidx_start
     try:
         while left[1] > int(all_keys[lidx_end].split(':')[1][:-1]):
@@ -77,7 +77,7 @@ def token_idx(left, right, pos_dict):
     return all_keys, lidx_start, lidx_end, ridx_start, ridx_end
 
 def compute_ngbrs(all_keys, lidx_start, lidx_end, ridx_start, ridx_end, pos_dict, pos_ngbrs, pos_fts=True):
-    
+
     idx = int(pos_fts)
     if lidx_start < pos_ngbrs:
         lngbrs = ['<pad>' for k in range(pos_ngbrs - lidx_start)] + [pos_dict[all_keys[k]][idx] for k in list(range(lidx_start)) + list(range(lidx_end + 1, lidx_end+pos_ngbrs+1))]
@@ -104,14 +104,14 @@ def compute_ngbrs(all_keys, lidx_start, lidx_end, ridx_start, ridx_end, pos_dict
 
 
 def pos_features(all_keys, lidx_start, lidx_end, ridx_start, ridx_end, pos_dict, pos_ngbrs, pos2idx):
-       
+
     lngbrs, rngbrs = compute_ngbrs(all_keys, lidx_start, lidx_end, ridx_start, ridx_end, pos_dict, pos_ngbrs)
     return [pos2idx[x] if x in pos2idx.keys() else len(pos2idx) for x in [pos_dict[all_keys[lidx_start]][1], pos_dict[all_keys[ridx_start]][1]] + lngbrs + rngbrs]
 
 
 def distance_features(lidx_start, lidx_end, ridx_start, ridx_end):
 
-    ### if multiple tokens, take the mid-point                                                                                     
+    ### if multiple tokens, take the mid-point
     return (float(lidx_start) + float(lidx_end)) / 2.0 -  (float(ridx_start) + float(ridx_end) ) / 2.0
 
 
@@ -164,12 +164,12 @@ def polarity_features(left, right):
 
 
 def tense_features(left, right):
-    
-    tense_dict = {'PAST': 0, 
-                  'PRESENT': 1, 
-                  'INFINITIVE': 2, 
-                  'FUTURE': 3, 
-                  'PRESPART': 4, 
+
+    tense_dict = {'PAST': 0,
+                  'PRESENT': 1,
+                  'INFINITIVE': 2,
+                  'FUTURE': 3,
+                  'PRESPART': 4,
                   'PASTPART': 5}
 
     li = np.zeros(len(tense_dict))

@@ -5,8 +5,9 @@ import argparse
 from collections import defaultdict, Counter, OrderedDict
 import random
 import logging as log
-from pytorch_pretrained_bert.modeling import BertModel, BertConfig, PreTrainedBertModel
-from pytorch_pretrained_bert.tokenization import BertTokenizer
+# from pytorch_pretrained_bert.modeling import BertModel, BertConfig, PreTrainedBertModel
+# from pytorch_pretrained_bert.tokenization import BertTokenizer
+from pytorch_transformers import BertModel, BertTokenizer
 import os
 import torch
 from torch.utils import data
@@ -45,12 +46,12 @@ def create_features(ex, pos2idx, w2i, tokenizer, bert_model):
     all_keys, lidx_start, lidx_end, ridx_start, ridx_end = \
         token_idx(ex['left_event'].span, ex['right_event'].span, pos_dict)
 
-    # truncate dictionary into three pieces                                                                                          
+    # truncate dictionary into three pieces
     left_seq = [pos_dict[x][0] for x in all_keys[:lidx_start]]
     right_seq = [pos_dict[x][0] for x in all_keys[ridx_end + 1:]]
     in_seq = [pos_dict[x][0] for x in all_keys[lidx_start:ridx_end+1]]
 
-    # find context sentence(s) start and end indices                                                                                 
+    # find context sentence(s) start and end indices
     try:
         sent_start = max(loc for loc, val in enumerate(left_seq) if val == '.') + 1
     except:
@@ -77,29 +78,29 @@ def create_features(ex, pos2idx, w2i, tokenizer, bert_model):
     pos = [pos2idx[k] if k in pos2idx.keys() else len(pos2idx) for k in [pos_dict[x][1] for x in sent_key]]
     ent = [(x, ent_labels[x]) for x in sent_key]
 
-    # calculate events' index in context sentences                                                                            
+    # calculate events' index in context sentences
     lidx_start_s = lidx_start - sent_start
     lidx_end_s = lidx_end - sent_start
     ridx_start_s = ridx_start - sent_start
     ridx_end_s = ridx_end - sent_start
 
-    # bert sentence segment ids                                                                                          
-    segments_ids = []  # [0, ..., 0, 0, 1, 1, ...., 1]                                                                     
+    # bert sentence segment ids
+    segments_ids = []  # [0, ..., 0, 0, 1, 1, ...., 1]
     seg = 0
     bert_pos = []
     bert_ent = []
 
-    # append sentence start                                                                         
+    # append sentence start
     bert_tokens = ["[CLS]"]
-    # original token to bert word-piece token mapping                                                                              
+    # original token to bert word-piece token mapping
     orig_to_tok_map = []
 
     segments_ids.append(seg)
     bert_pos.append("[CLS]")
 
-    # sent_start is non-event by default                                                          
+    # sent_start is non-event by default
     bert_ent.append(("[CLS]", 0))
-    
+
     for i, token in enumerate(orig_sent):
         orig_to_tok_map.append(len(bert_tokens))
         if token == '.':
@@ -110,7 +111,7 @@ def create_features(ex, pos2idx, w2i, tokenizer, bert_model):
                 bert_tokens.append("[SEP]")
             else:
                 bert_tokens.append(".")
-            # sentence sep is non-event by default                                                
+            # sentence sep is non-event by default
             bert_ent.append(('[SEP]', 0))
         else:
             temp_tokens = tokenizer.tokenize(token)
@@ -120,32 +121,32 @@ def create_features(ex, pos2idx, w2i, tokenizer, bert_model):
                 bert_pos.append(pos[i])
                 bert_ent.append(ent[i])
 
-    orig_to_tok_map.append(len(bert_tokens))                                                        
+    orig_to_tok_map.append(len(bert_tokens))
 
-    bert_tokens.append("[SEP]")                                                                      
+    bert_tokens.append("[SEP]")
     bert_pos.append("[SEP]")
     bert_ent.append(('[SEP]', 0))
 
-    segments_ids.append(seg)                                                  
-    assert len(segments_ids) == len(bert_tokens)                                                                
+    segments_ids.append(seg)
+    assert len(segments_ids) == len(bert_tokens)
     assert len(bert_pos) == len(bert_tokens)
 
-    # map original token index into bert (word_piece) index                   
+    # map original token index into bert (word_piece) index
     lidx_start_s = orig_to_tok_map[lidx_start_s]
     lidx_end_s = orig_to_tok_map[lidx_end_s + 1] - 1
-                                                                                                                  
-    ridx_start_s = orig_to_tok_map[ridx_start_s]                                                                 
+
+    ridx_start_s = orig_to_tok_map[ridx_start_s]
     ridx_end_s = orig_to_tok_map[ridx_end_s + 1] - 1
 
     bert_sent = tokenizer.convert_tokens_to_ids(bert_tokens)
 
     bert_sent = torch.tensor([bert_sent])
     segs_sent = torch.tensor([segments_ids])
-                                                                                                                
-    # use the last layer computed by BERT as token vectors                                                     
-    try:                                              
+
+    # use the last layer computed by BERT as token vectors
+    try:
         out, _ = bert_model(bert_sent, segs_sent)
-        sent = out[-1].squeeze(0).data.numpy()                                                                  
+        sent = out[-1].squeeze(0).data.numpy()
     # rare long sentences may fail > max_sent_len in BERT
     except:
         sent_len = len(bert_tokens)
@@ -153,10 +154,10 @@ def create_features(ex, pos2idx, w2i, tokenizer, bert_model):
         sent = []
         bert_pos = []
 
-    # create lexical features for the model                               
+    # create lexical features for the model
     new_fts = []
     new_fts.append(-distance_features(lidx_start, lidx_end, ridx_start, ridx_end))
-    #new_fts.extend(polarity_features(ex.left, ex.right))                                             
+    #new_fts.extend(polarity_features(ex.left, ex.right))
     #new_fts.extend(tense_features(ex.left, ex.right))
 
     return (sent, bert_ent, bert_pos, new_fts, ex['rev'], lidx_start_s, lidx_end_s, ridx_start_s, ridx_end_s, pred_ind)
@@ -173,9 +174,9 @@ def data_split(train_docs, eval_docs, data, neg_r = 0.0, seed = 7):
     train_set_neg = []
 
     for s in data:
-        # dev-set doesn't require unlabled data                                                       
+        # dev-set doesn't require unlabled data
         if s[0] in eval_docs:
-            # 0:doc_id, 1:ex.id, 2:(ex.left.id, ex.right.id), 3:label_id, 4:features                  
+            # 0:doc_id, 1:ex.id, 2:(ex.left.id, ex.right.id), 3:label_id, 4:features
             eval_set.append(s)
         elif s[1][0] in ['L', 'C']:
             train_set.append(s)
@@ -196,8 +197,8 @@ def split_and_save(train_docs, dev_docs, data, seed, save_dir, nr=0.0):
     train_data, dev_data = data_split(train_docs, dev_docs, data, neg_r = nr)
     print(len(train_data), len(dev_data))
 
-    # shuffle                                                                                         
-    #random.Random(seed).shuffle(train_data)                                                          
+    # shuffle
+    #random.Random(seed).shuffle(train_data)
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
 
@@ -213,9 +214,9 @@ def split_and_save(train_docs, dev_docs, data, seed, save_dir, nr=0.0):
 
 
 def reduce_vocab(data, save_dir, w2i, glove):
-    # sent in data is index by original GloVe emb                                                     
-    # 1. need to output a mappting from GloVe index to reduce index: glove2vocab                      
-    # 2. a reduced emb saved in npy                                                                   
+    # sent in data is index by original GloVe emb
+    # 1. need to output a mappting from GloVe index to reduce index: glove2vocab
+    # 2. a reduced emb saved in npy
 
     glove2vocab = {0:0, 1:1}
     count = 2
@@ -256,7 +257,7 @@ def main(args):
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
     bert_model = BertModel.from_pretrained('bert-base-uncased')
 
-    train_data = pickle.load(open( args.data_dir + "/train.pickle", "rb" ))    
+    train_data = pickle.load(open( args.data_dir + "/train.pickle", "rb" ))
     print("process train...")
     data = [parallel(v, k, args, tokenizer, bert_model) for k,v in train_data.items()]
 
@@ -266,10 +267,10 @@ def main(args):
         dev_data = [parallel(v, k, args, tokenizer, bert_model) for k,v in dev_data.items()]
         data += dev_data
 
-    # doc splits                                                                                      
+    # doc splits
     if args.data_type in ['matres']:
         train_docs, dev_docs = train_test_split(args.train_docs, test_size=0.2, random_state=args.seed)
-    # TBDense data has given splits on train/dev/test  
+    # TBDense data has given splits on train/dev/test
     else:
         train_docs = args.train_docs
         dev_docs = args.dev_docs
@@ -290,19 +291,19 @@ def main(args):
 
         split_and_save(train_docs, dev_docs, data, args.seed, args.save_data_dir)
 
-        # quick trick to reduce number of tokens in GloVe                                             
+        # quick trick to reduce number of tokens in GloVe
         reduce_vocab(data + test_data, args.save_data_dir, args.w2i, args.glove)
     return
 
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser()
-    p.add_argument('-data_dir', type=str, default = '../data')
+    p.add_argument('-data_dir', type=str, default = '../data/')
     p.add_argument('-other_dir', type=str, default = '../other')
     p.add_argument('-train_docs', type=list, default = [])
     p.add_argument('-dev_docs', type=list, default = [])
     p.add_argument('-split', type=str, default='all_joint')
-    p.add_argument('-data_type', type=str, default='tbd')
+    p.add_argument('-data_type', type=str, default='matres')
     p.add_argument('-seed', type=int, default=7)
     args = p.parse_args()
 
@@ -316,6 +317,7 @@ if __name__ == '__main__':
     args.save_data_dir = args.data_dir + '/' + args.split
 
     glove = read_glove(args.other_dir + "/glove.6B.50d.txt")
+    args.glove = glove
     vocab = np.array(['<pad>', '<unk>'] + list(glove.keys()))
     args.w2i = OrderedDict((vocab[i], i) for i in range(len(vocab)))
 
